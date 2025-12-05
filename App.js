@@ -6,8 +6,10 @@ import {
   TouchableOpacity,
   Alert,
   Vibration,
+  Dimensions,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
+import { LinearGradient } from 'expo-linear-gradient';
 
 const WORK_TIME = 25 * 60; // 25 minutes in seconds
 const SHORT_BREAK = 5 * 60; // 5 minutes in seconds
@@ -107,92 +109,179 @@ export default function App() {
     }
   };
 
-  const getBackgroundColor = () => {
+  const getGradientColors = () => {
     switch (sessionType) {
       case 'work':
-        return '#e74c3c';
+        return ['#ff6b6b', '#ee5a6f', '#c44569'];
       case 'shortBreak':
-        return '#3498db';
+        return ['#4ecdc4', '#44a3a3', '#2d8a82'];
       case 'longBreak':
-        return '#2ecc71';
+        return ['#95e1d3', '#6bcf9f', '#4ecdc4'];
       default:
-        return '#e74c3c';
+        return ['#ff6b6b', '#ee5a6f', '#c44569'];
     }
   };
 
+  const getProgress = () => {
+    let totalTime;
+    switch (sessionType) {
+      case 'work':
+        totalTime = WORK_TIME;
+        break;
+      case 'shortBreak':
+        totalTime = SHORT_BREAK;
+        break;
+      case 'longBreak':
+        totalTime = LONG_BREAK;
+        break;
+      default:
+        totalTime = WORK_TIME;
+    }
+    return ((totalTime - timeLeft) / totalTime) * 100;
+  };
+
+  const progress = getProgress();
+  const gradientColors = getGradientColors();
+
   return (
-    <View style={[styles.container, { backgroundColor: getBackgroundColor() }]}>
+    <LinearGradient
+      colors={gradientColors}
+      style={styles.container}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+    >
       <StatusBar style="light" />
       <View style={styles.content}>
-        <Text style={styles.title}>{getSessionTitle()}</Text>
-        <Text style={styles.timer}>{formatTime(timeLeft)}</Text>
-        <Text style={styles.sessionInfo}>
-          Tamamlanan Oturum: {sessionCount}
-        </Text>
+        <View style={styles.header}>
+          <Text style={styles.title}>{getSessionTitle()}</Text>
+          <View style={styles.sessionBadge}>
+            <Text style={styles.sessionBadgeText}>
+              {sessionCount} Oturum
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.timerContainer}>
+          <View style={styles.progressRing}>
+            <View
+              style={[
+                styles.progressFill,
+                {
+                  height: `${progress}%`,
+                },
+              ]}
+            />
+          </View>
+          <View style={styles.timerContent}>
+            <Text style={styles.timer}>{formatTime(timeLeft)}</Text>
+            <Text style={styles.timerLabel}>Kalan Süre</Text>
+          </View>
+        </View>
 
         <View style={styles.buttonContainer}>
           {!isRunning ? (
-            <TouchableOpacity style={styles.button} onPress={startTimer}>
-              <Text style={styles.buttonText}>Başlat</Text>
+            <TouchableOpacity
+              style={[styles.button, styles.primaryButton]}
+              onPress={startTimer}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.primaryButtonText}>▶ Başlat</Text>
             </TouchableOpacity>
           ) : (
-            <TouchableOpacity style={styles.button} onPress={pauseTimer}>
-              <Text style={styles.buttonText}>Duraklat</Text>
+            <TouchableOpacity
+              style={[styles.button, styles.secondaryButton]}
+              onPress={pauseTimer}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.secondaryButtonText}>⏸ Duraklat</Text>
             </TouchableOpacity>
           )}
-          <TouchableOpacity style={styles.button} onPress={resetTimer}>
-            <Text style={styles.buttonText}>Sıfırla</Text>
+          <TouchableOpacity
+            style={[styles.button, styles.resetButton]}
+            onPress={resetTimer}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.resetButtonText}>↻ Sıfırla</Text>
           </TouchableOpacity>
         </View>
 
-        <View style={styles.sessionButtons}>
-          <TouchableOpacity
-            style={[
-              styles.sessionButton,
-              sessionType === 'work' && styles.activeSessionButton,
-            ]}
-            onPress={() => {
-              if (!isRunning) {
-                setSessionType('work');
-                setTimeLeft(WORK_TIME);
-              }
-            }}
-          >
-            <Text style={styles.sessionButtonText}>Çalışma</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[
-              styles.sessionButton,
-              sessionType === 'shortBreak' && styles.activeSessionButton,
-            ]}
-            onPress={() => {
-              if (!isRunning) {
-                setSessionType('shortBreak');
-                setTimeLeft(SHORT_BREAK);
-              }
-            }}
-          >
-            <Text style={styles.sessionButtonText}>Kısa Mola</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[
-              styles.sessionButton,
-              sessionType === 'longBreak' && styles.activeSessionButton,
-            ]}
-            onPress={() => {
-              if (!isRunning) {
-                setSessionType('longBreak');
-                setTimeLeft(LONG_BREAK);
-              }
-            }}
-          >
-            <Text style={styles.sessionButtonText}>Uzun Mola</Text>
-          </TouchableOpacity>
+        <View style={styles.sessionButtonsContainer}>
+          <Text style={styles.sessionButtonsTitle}>Oturum Seç</Text>
+          <View style={styles.sessionButtons}>
+            <TouchableOpacity
+              style={[
+                styles.sessionButton,
+                sessionType === 'work' && styles.activeSessionButton,
+              ]}
+              onPress={() => {
+                if (!isRunning) {
+                  setSessionType('work');
+                  setTimeLeft(WORK_TIME);
+                }
+              }}
+              activeOpacity={0.7}
+            >
+              <Text
+                style={[
+                  styles.sessionButtonText,
+                  sessionType === 'work' && styles.activeSessionButtonText,
+                ]}
+              >
+                ⚡ Çalışma
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.sessionButton,
+                sessionType === 'shortBreak' && styles.activeSessionButton,
+              ]}
+              onPress={() => {
+                if (!isRunning) {
+                  setSessionType('shortBreak');
+                  setTimeLeft(SHORT_BREAK);
+                }
+              }}
+              activeOpacity={0.7}
+            >
+              <Text
+                style={[
+                  styles.sessionButtonText,
+                  sessionType === 'shortBreak' && styles.activeSessionButtonText,
+                ]}
+              >
+                ☕ Kısa Mola
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.sessionButton,
+                sessionType === 'longBreak' && styles.activeSessionButton,
+              ]}
+              onPress={() => {
+                if (!isRunning) {
+                  setSessionType('longBreak');
+                  setTimeLeft(LONG_BREAK);
+                }
+              }}
+              activeOpacity={0.7}
+            >
+              <Text
+                style={[
+                  styles.sessionButtonText,
+                  sessionType === 'longBreak' && styles.activeSessionButtonText,
+                ]}
+              >
+                🌴 Uzun Mola
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
-    </View>
+    </LinearGradient>
   );
 }
+
+const { width } = Dimensions.get('window');
 
 const styles = StyleSheet.create({
   container: {
@@ -202,69 +291,195 @@ const styles = StyleSheet.create({
   },
   content: {
     alignItems: 'center',
-    padding: 20,
+    padding: 24,
+    width: '100%',
+    maxWidth: 400,
+  },
+  header: {
+    alignItems: 'center',
+    marginBottom: 40,
+    width: '100%',
   },
   title: {
-    fontSize: 32,
-    fontWeight: 'bold',
+    fontSize: 28,
+    fontWeight: '700',
     color: '#fff',
-    marginBottom: 20,
     textAlign: 'center',
+    marginBottom: 12,
+    textShadowColor: 'rgba(0, 0, 0, 0.2)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 4,
+    letterSpacing: 0.5,
+  },
+  sessionBadge: {
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.4)',
+  },
+  sessionBadgeText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  timerContainer: {
+    width: 220,
+    height: 220,
+    borderRadius: 110,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 50,
+    overflow: 'hidden',
+    borderWidth: 3,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  progressRing: {
+    position: 'absolute',
+    width: '100%',
+    height: '100%',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  progressFill: {
+    position: 'absolute',
+    bottom: 0,
+    width: '100%',
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+    borderTopLeftRadius: 110,
+    borderTopRightRadius: 110,
+  },
+  timerContent: {
+    alignItems: 'center',
+    zIndex: 1,
   },
   timer: {
-    fontSize: 80,
-    fontWeight: 'bold',
+    fontSize: 64,
+    fontWeight: '700',
     color: '#fff',
-    marginBottom: 20,
     fontFamily: 'monospace',
+    textShadowColor: 'rgba(0, 0, 0, 0.2)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 4,
+    letterSpacing: 2,
   },
-  sessionInfo: {
-    fontSize: 18,
-    color: '#fff',
-    marginBottom: 40,
-    opacity: 0.9,
+  timerLabel: {
+    fontSize: 12,
+    color: 'rgba(255, 255, 255, 0.9)',
+    marginTop: 4,
+    fontWeight: '500',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
   },
   buttonContainer: {
     flexDirection: 'row',
-    gap: 20,
+    gap: 12,
     marginBottom: 40,
+    width: '100%',
+    justifyContent: 'center',
   },
   button: {
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
-    paddingHorizontal: 40,
-    paddingVertical: 15,
-    borderRadius: 25,
+    paddingHorizontal: 32,
+    paddingVertical: 16,
+    borderRadius: 30,
+    minWidth: 120,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  primaryButton: {
+    backgroundColor: '#fff',
+    flex: 1,
+  },
+  primaryButtonText: {
+    color: '#333',
+    fontSize: 16,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  secondaryButton: {
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
     borderWidth: 2,
     borderColor: '#fff',
+    flex: 1,
   },
-  buttonText: {
+  secondaryButtonText: {
     color: '#fff',
-    fontSize: 18,
-    fontWeight: 'bold',
+    fontSize: 16,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  resetButton: {
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.5)',
+    paddingHorizontal: 24,
+    minWidth: 100,
+  },
+  resetButtonText: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  sessionButtonsContainer: {
+    width: '100%',
+    alignItems: 'center',
+  },
+  sessionButtonsTitle: {
+    fontSize: 14,
+    color: 'rgba(255, 255, 255, 0.9)',
+    marginBottom: 16,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
   },
   sessionButtons: {
     flexDirection: 'row',
-    gap: 10,
+    gap: 8,
     flexWrap: 'wrap',
     justifyContent: 'center',
+    width: '100%',
   },
   sessionButton: {
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.5)',
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    borderRadius: 25,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+    minWidth: 100,
+    alignItems: 'center',
   },
   activeSessionButton: {
-    backgroundColor: 'rgba(255, 255, 255, 0.4)',
+    backgroundColor: 'rgba(255, 255, 255, 0.35)',
     borderColor: '#fff',
     borderWidth: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
   },
   sessionButtonText: {
-    color: '#fff',
-    fontSize: 14,
+    color: 'rgba(255, 255, 255, 0.9)',
+    fontSize: 13,
     fontWeight: '600',
+  },
+  activeSessionButtonText: {
+    color: '#fff',
+    fontWeight: '700',
   },
 });
 
