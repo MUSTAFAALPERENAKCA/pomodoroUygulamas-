@@ -22,6 +22,10 @@ export default function App() {
   const [isRunning, setIsRunning] = useState(false);
   const [sessionType, setSessionType] = useState("work"); // 'work', 'shortBreak', 'longBreak'
   const [sessionCount, setSessionCount] = useState(0);
+  const [dailyPomodoros, setDailyPomodoros] = useState(0);
+  const [dailyGoal, setDailyGoal] = useState(8);
+  const [showStats, setShowStats] = useState(false);
+  const [lastCompletedDate, setLastCompletedDate] = useState(null);
   const intervalRef = useRef(null);
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
@@ -65,35 +69,65 @@ export default function App() {
     }
   }, [isRunning]);
 
+  // Günlük pomodoro sayısını sıfırla (yeni gün başladığında)
+  useEffect(() => {
+    const today = new Date().toDateString();
+    if (lastCompletedDate !== today) {
+      setDailyPomodoros(0);
+      setLastCompletedDate(today);
+    }
+  }, []);
+
+  const getMotivationalMessage = () => {
+    const messages = [
+      "Harika iş çıkardın! 🎉",
+      "Mükemmel! Devam et! 💪",
+      "Süpersin! 🌟",
+      "Çok iyi gidiyorsun! 🚀",
+      "Harika! Sen bir şampiyonsun! 🏆",
+      "İnanılmaz! Devam et! ⭐",
+    ];
+    return messages[Math.floor(Math.random() * messages.length)];
+  };
+
   const handleTimerComplete = () => {
     Vibration.vibrate([500, 200, 500]);
-    Alert.alert(
-      "Süre Doldu!",
+
+    if (sessionType === "work") {
+      const newDailyCount = dailyPomodoros + 1;
+      setDailyPomodoros(newDailyCount);
+      const today = new Date().toDateString();
+      setLastCompletedDate(today);
+    }
+
+    const motivationalMsg =
+      sessionType === "work" ? getMotivationalMessage() : "";
+    const message =
       sessionType === "work"
-        ? "Çalışma süresi tamamlandı. Mola zamanı!"
-        : "Mola süresi tamamlandı. Tekrar çalışmaya hazır mısın?",
-      [
-        {
-          text: "Tamam",
-          onPress: () => {
-            if (sessionType === "work") {
-              const nextBreak = sessionCount === 3 ? "longBreak" : "shortBreak";
-              setSessionType(nextBreak);
-              setTimeLeft(nextBreak === "longBreak" ? LONG_BREAK : SHORT_BREAK);
-              if (nextBreak === "longBreak") {
-                setSessionCount(0);
-              } else {
-                setSessionCount((prev) => prev + 1);
-              }
+        ? `${motivationalMsg}\n\nÇalışma süresi tamamlandı. Mola zamanı!`
+        : "Mola süresi tamamlandı. Tekrar çalışmaya hazır mısın?";
+
+    Alert.alert("Süre Doldu!", message, [
+      {
+        text: "Tamam",
+        onPress: () => {
+          if (sessionType === "work") {
+            const nextBreak = sessionCount === 3 ? "longBreak" : "shortBreak";
+            setSessionType(nextBreak);
+            setTimeLeft(nextBreak === "longBreak" ? LONG_BREAK : SHORT_BREAK);
+            if (nextBreak === "longBreak") {
+              setSessionCount(0);
             } else {
-              setSessionType("work");
-              setTimeLeft(WORK_TIME);
+              setSessionCount((prev) => prev + 1);
             }
-            setIsRunning(false);
-          },
+          } else {
+            setSessionType("work");
+            setTimeLeft(WORK_TIME);
+          }
+          setIsRunning(false);
         },
-      ]
-    );
+      },
+    ]);
   };
 
   const startTimer = () => {
@@ -167,6 +201,10 @@ export default function App() {
     return ((totalTime - timeLeft) / totalTime) * 100;
   };
 
+  const getGoalProgress = () => {
+    return Math.min((dailyPomodoros / dailyGoal) * 100, 100);
+  };
+
   const progress = getProgress();
   const gradientColors = getGradientColors();
 
@@ -197,12 +235,58 @@ export default function App() {
       <StatusBar style="light" />
       <View style={styles.content}>
         <View style={styles.header}>
-          <Text style={styles.title}>{getSessionTitle()}</Text>
-          <View style={styles.sessionBadge}>
-            <Text style={styles.sessionBadgeText}>
-              🎯 {sessionCount} Oturum Tamamlandı
-            </Text>
+          <View style={styles.headerTop}>
+            <Text style={styles.title}>{getSessionTitle()}</Text>
+            <TouchableOpacity
+              style={styles.statsButton}
+              onPress={() => setShowStats(!showStats)}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.statsButtonText}>
+                {showStats ? "✕" : "📊"}
+              </Text>
+            </TouchableOpacity>
           </View>
+
+          {showStats ? (
+            <View style={styles.statsContainer}>
+              <View style={styles.statItem}>
+                <Text style={styles.statLabel}>Günlük Pomodoro</Text>
+                <Text style={styles.statValue}>{dailyPomodoros}</Text>
+              </View>
+              <View style={styles.statItem}>
+                <Text style={styles.statLabel}>Günlük Hedef</Text>
+                <Text style={styles.statValue}>{dailyGoal}</Text>
+              </View>
+              <View style={styles.goalProgressContainer}>
+                <View style={styles.goalProgressBar}>
+                  <View
+                    style={[
+                      styles.goalProgressFill,
+                      { width: `${getGoalProgress()}%` },
+                    ]}
+                  />
+                </View>
+                <Text style={styles.goalProgressText}>
+                  {Math.round(getGoalProgress())}% Tamamlandı
+                </Text>
+              </View>
+              {dailyPomodoros >= dailyGoal && (
+                <Text style={styles.goalAchievedText}>
+                  🎉 Günlük hedefe ulaştın! Harika iş!
+                </Text>
+              )}
+            </View>
+          ) : (
+            <View style={styles.sessionBadge}>
+              <Text style={styles.sessionBadgeText}>
+                🎯 {sessionCount} Oturum Tamamlandı
+              </Text>
+              <Text style={styles.dailyPomodorosText}>
+                📈 Bugün: {dailyPomodoros} Pomodoro
+              </Text>
+            </View>
+          )}
         </View>
 
         <Animated.View
@@ -435,21 +519,113 @@ const styles = StyleSheet.create({
     marginBottom: 40,
     width: "100%",
   },
+  headerTop: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    width: "100%",
+    marginBottom: 20,
+    position: "relative",
+  },
   title: {
     fontSize: 36,
     fontWeight: "900",
     color: "#fff",
     textAlign: "center",
-    marginBottom: 20,
     textShadowColor: "rgba(0, 0, 0, 0.4)",
     textShadowOffset: { width: 0, height: 4 },
     textShadowRadius: 10,
     letterSpacing: 1.5,
+    flex: 1,
+  },
+  statsButton: {
+    position: "absolute",
+    right: 0,
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 2,
+    borderColor: "rgba(255, 255, 255, 0.4)",
+  },
+  statsButtonText: {
+    fontSize: 20,
+    color: "#fff",
+  },
+  statsContainer: {
+    width: "100%",
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
+    borderRadius: 24,
+    padding: 20,
+    borderWidth: 2,
+    borderColor: "rgba(255, 255, 255, 0.3)",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  statItem: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  statLabel: {
+    color: "rgba(255, 255, 255, 0.9)",
+    fontSize: 16,
+    fontWeight: "700",
+  },
+  statValue: {
+    color: "#fff",
+    fontSize: 24,
+    fontWeight: "900",
+    textShadowColor: "rgba(0, 0, 0, 0.3)",
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 4,
+  },
+  goalProgressContainer: {
+    marginTop: 8,
+  },
+  goalProgressBar: {
+    height: 12,
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
+    borderRadius: 6,
+    overflow: "hidden",
+    marginBottom: 8,
+  },
+  goalProgressFill: {
+    height: "100%",
+    backgroundColor: "rgba(255, 255, 255, 0.9)",
+    borderRadius: 6,
+    shadowColor: "#fff",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.5,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  goalProgressText: {
+    color: "rgba(255, 255, 255, 0.95)",
+    fontSize: 13,
+    fontWeight: "700",
+    textAlign: "center",
+  },
+  goalAchievedText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "800",
+    textAlign: "center",
+    marginTop: 12,
+    textShadowColor: "rgba(0, 0, 0, 0.3)",
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 4,
   },
   sessionBadge: {
     backgroundColor: "rgba(255, 255, 255, 0.25)",
     paddingHorizontal: 24,
-    paddingVertical: 10,
+    paddingVertical: 12,
     borderRadius: 30,
     borderWidth: 2,
     borderColor: "rgba(255, 255, 255, 0.4)",
@@ -458,12 +634,20 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 5,
+    alignItems: "center",
   },
   sessionBadgeText: {
     color: "#fff",
     fontSize: 15,
     fontWeight: "800",
     letterSpacing: 0.8,
+    marginBottom: 4,
+  },
+  dailyPomodorosText: {
+    color: "rgba(255, 255, 255, 0.95)",
+    fontSize: 13,
+    fontWeight: "700",
+    letterSpacing: 0.5,
   },
   timerContainer: {
     width: 300,
