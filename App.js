@@ -13,19 +13,56 @@ import { StatusBar } from "expo-status-bar";
 import { LinearGradient } from "expo-linear-gradient";
 import Svg, { Circle } from "react-native-svg";
 
-const WORK_TIME = 25 * 60; // 25 minutes in seconds
-const SHORT_BREAK = 5 * 60; // 5 minutes in seconds
-const LONG_BREAK = 15 * 60; // 15 minutes in seconds
+const DEFAULT_WORK_TIME = 25 * 60; // 25 minutes in seconds
+const DEFAULT_SHORT_BREAK = 5 * 60; // 5 minutes in seconds
+const DEFAULT_LONG_BREAK = 15 * 60; // 15 minutes in seconds
+
+const THEMES = {
+  vibrant: {
+    work: ["#6366f1", "#8b5cf6", "#a855f7", "#ec4899"],
+    shortBreak: ["#06b6d4", "#3b82f6", "#8b5cf6", "#06b6d4"],
+    longBreak: ["#f59e0b", "#ef4444", "#ec4899", "#f59e0b"],
+  },
+  ocean: {
+    work: ["#0ea5e9", "#06b6d4", "#14b8a6", "#06b6d4"],
+    shortBreak: ["#06b6d4", "#0891b2", "#14b8a6", "#06b6d4"],
+    longBreak: ["#10b981", "#14b8a6", "#06b6d4", "#10b981"],
+  },
+  sunset: {
+    work: ["#f97316", "#fb923c", "#fbbf24", "#f59e0b"],
+    shortBreak: ["#ec4899", "#f43f5e", "#fb7185", "#ec4899"],
+    longBreak: ["#8b5cf6", "#a855f7", "#c026d3", "#8b5cf6"],
+  },
+  forest: {
+    work: ["#22c55e", "#16a34a", "#15803d", "#22c55e"],
+    shortBreak: ["#84cc16", "#65a30d", "#4d7c0f", "#84cc16"],
+    longBreak: ["#10b981", "#059669", "#047857", "#10b981"],
+  },
+};
 
 export default function App() {
-  const [timeLeft, setTimeLeft] = useState(WORK_TIME);
+  const [workTime, setWorkTime] = useState(DEFAULT_WORK_TIME);
+  const [shortBreakTime, setShortBreakTime] = useState(DEFAULT_SHORT_BREAK);
+  const [longBreakTime, setLongBreakTime] = useState(DEFAULT_LONG_BREAK);
+  const [timeLeft, setTimeLeft] = useState(DEFAULT_WORK_TIME);
   const [isRunning, setIsRunning] = useState(false);
   const [sessionType, setSessionType] = useState("work"); // 'work', 'shortBreak', 'longBreak'
   const [sessionCount, setSessionCount] = useState(0);
   const [dailyPomodoros, setDailyPomodoros] = useState(0);
+  const [weeklyPomodoros, setWeeklyPomodoros] = useState(0);
   const [dailyGoal, setDailyGoal] = useState(8);
   const [showStats, setShowStats] = useState(false);
   const [lastCompletedDate, setLastCompletedDate] = useState(null);
+  const [lastSessionTime, setLastSessionTime] = useState(null);
+  const [lastSessionType, setLastSessionType] = useState(null);
+  const [currentTheme, setCurrentTheme] = useState("vibrant");
+  const [showThemeSelector, setShowThemeSelector] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [showAbout, setShowAbout] = useState(false);
+  const [autoStartBreaks, setAutoStartBreaks] = useState(false);
+  const [autoStartPomodoros, setAutoStartPomodoros] = useState(false);
+  const [soundEnabled, setSoundEnabled] = useState(true);
+  const [vibrationEnabled, setVibrationEnabled] = useState(true);
   const intervalRef = useRef(null);
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
@@ -86,19 +123,44 @@ export default function App() {
       "Çok iyi gidiyorsun! 🚀",
       "Harika! Sen bir şampiyonsun! 🏆",
       "İnanılmaz! Devam et! ⭐",
+      "Odaklanman muhteşem! 🎯",
+      "Başarılısın! 💫",
+      "Verimli bir oturumdu! 📈",
+      "Kendini geliştiriyorsun! 🌱",
+    ];
+    return messages[Math.floor(Math.random() * messages.length)];
+  };
+
+  const getBreakMessage = () => {
+    const messages = [
+      "Mola süresi tamamlandı. Tekrar çalışmaya hazır mısın? 💪",
+      "Dinlendin mi? Hadi devam edelim! 🚀",
+      "Mola bitti! Yeni bir oturuma hazır ol! ⚡",
+      "Enerji doldu! Başlayalım! 🔋",
+      "Mükemmel! Şimdi tekrar odaklanma zamanı! 🎯",
     ];
     return messages[Math.floor(Math.random() * messages.length)];
   };
 
   const handleTimerComplete = () => {
-    Vibration.vibrate([500, 200, 500]);
+    if (vibrationEnabled) {
+      Vibration.vibrate([500, 200, 500]);
+    }
 
     if (sessionType === "work") {
       const newDailyCount = dailyPomodoros + 1;
       setDailyPomodoros(newDailyCount);
+      setWeeklyPomodoros((prev) => prev + 1);
       const today = new Date().toDateString();
       setLastCompletedDate(today);
     }
+
+    // Son oturum bilgilerini kaydet
+    const now = new Date();
+    setLastSessionTime(
+      now.toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" })
+    );
+    setLastSessionType(sessionType);
 
     const motivationalMsg =
       sessionType === "work" ? getMotivationalMessage() : "";
@@ -114,7 +176,9 @@ export default function App() {
           if (sessionType === "work") {
             const nextBreak = sessionCount === 3 ? "longBreak" : "shortBreak";
             setSessionType(nextBreak);
-            setTimeLeft(nextBreak === "longBreak" ? LONG_BREAK : SHORT_BREAK);
+            setTimeLeft(
+              nextBreak === "longBreak" ? longBreakTime : shortBreakTime
+            );
             if (nextBreak === "longBreak") {
               setSessionCount(0);
             } else {
@@ -122,7 +186,7 @@ export default function App() {
             }
           } else {
             setSessionType("work");
-            setTimeLeft(WORK_TIME);
+            setTimeLeft(workTime);
           }
           setIsRunning(false);
         },
@@ -138,14 +202,44 @@ export default function App() {
     setIsRunning(false);
   };
 
+  const quickStart = (type, time) => {
+    setSessionType(type);
+    setTimeLeft(time);
+    setIsRunning(true);
+  };
+
   const resetTimer = () => {
     setIsRunning(false);
     if (sessionType === "work") {
-      setTimeLeft(WORK_TIME);
+      setTimeLeft(workTime);
     } else if (sessionType === "shortBreak") {
-      setTimeLeft(SHORT_BREAK);
+      setTimeLeft(shortBreakTime);
     } else {
-      setTimeLeft(LONG_BREAK);
+      setTimeLeft(longBreakTime);
+    }
+  };
+
+  const adjustTime = (type, increment) => {
+    const newValue =
+      increment > 0
+        ? Math.min(60 * 60, increment) // max 60 dakika
+        : Math.max(1 * 60, increment); // min 1 dakika
+
+    if (type === "work") {
+      setWorkTime(newValue);
+      if (sessionType === "work" && !isRunning) {
+        setTimeLeft(newValue);
+      }
+    } else if (type === "shortBreak") {
+      setShortBreakTime(newValue);
+      if (sessionType === "shortBreak" && !isRunning) {
+        setTimeLeft(newValue);
+      }
+    } else if (type === "longBreak") {
+      setLongBreakTime(newValue);
+      if (sessionType === "longBreak" && !isRunning) {
+        setTimeLeft(newValue);
+      }
     }
   };
 
@@ -171,15 +265,16 @@ export default function App() {
   };
 
   const getGradientColors = () => {
+    const theme = THEMES[currentTheme];
     switch (sessionType) {
       case "work":
-        return ["#6366f1", "#8b5cf6", "#a855f7", "#ec4899"];
+        return theme.work;
       case "shortBreak":
-        return ["#06b6d4", "#3b82f6", "#8b5cf6", "#06b6d4"];
+        return theme.shortBreak;
       case "longBreak":
-        return ["#f59e0b", "#ef4444", "#ec4899", "#f59e0b"];
+        return theme.longBreak;
       default:
-        return ["#6366f1", "#8b5cf6", "#a855f7", "#ec4899"];
+        return theme.work;
     }
   };
 
@@ -187,22 +282,29 @@ export default function App() {
     let totalTime;
     switch (sessionType) {
       case "work":
-        totalTime = WORK_TIME;
+        totalTime = workTime;
         break;
       case "shortBreak":
-        totalTime = SHORT_BREAK;
+        totalTime = shortBreakTime;
         break;
       case "longBreak":
-        totalTime = LONG_BREAK;
+        totalTime = longBreakTime;
         break;
       default:
-        totalTime = WORK_TIME;
+        totalTime = workTime;
     }
     return ((totalTime - timeLeft) / totalTime) * 100;
   };
 
   const getGoalProgress = () => {
     return Math.min((dailyPomodoros / dailyGoal) * 100, 100);
+  };
+
+  const adjustDailyGoal = (increment) => {
+    const newGoal = dailyGoal + increment;
+    if (newGoal >= 1 && newGoal <= 20) {
+      setDailyGoal(newGoal);
+    }
   };
 
   const progress = getProgress();
@@ -236,6 +338,15 @@ export default function App() {
       <View style={styles.content}>
         <View style={styles.header}>
           <View style={styles.headerTop}>
+            <TouchableOpacity
+              style={[styles.statsButton, styles.leftButton]}
+              onPress={() => setShowThemeSelector(!showThemeSelector)}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.statsButtonText}>
+                {showThemeSelector ? "✕" : "🎨"}
+              </Text>
+            </TouchableOpacity>
             <Text style={styles.title}>{getSessionTitle()}</Text>
             <TouchableOpacity
               style={styles.statsButton}
@@ -248,7 +359,40 @@ export default function App() {
             </TouchableOpacity>
           </View>
 
-          {showStats ? (
+          {showThemeSelector ? (
+            <View style={styles.statsContainer}>
+              <Text style={styles.themeSelectorTitle}>🎨 Tema Seç</Text>
+              <View style={styles.themeGrid}>
+                {Object.keys(THEMES).map((themeName) => (
+                  <TouchableOpacity
+                    key={themeName}
+                    style={[
+                      styles.themeButton,
+                      currentTheme === themeName && styles.activeThemeButton,
+                    ]}
+                    onPress={() => setCurrentTheme(themeName)}
+                    activeOpacity={0.7}
+                  >
+                    <LinearGradient
+                      colors={THEMES[themeName].work}
+                      style={styles.themePreview}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                    />
+                    <Text style={styles.themeButtonText}>
+                      {themeName === "vibrant"
+                        ? "🌈 Canlı"
+                        : themeName === "ocean"
+                        ? "🌊 Okyanus"
+                        : themeName === "sunset"
+                        ? "🌅 Gün Batımı"
+                        : "🌲 Orman"}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          ) : showStats ? (
             <View style={styles.statsContainer}>
               <View style={styles.statItem}>
                 <Text style={styles.statLabel}>Günlük Pomodoro</Text>
@@ -390,7 +534,100 @@ export default function App() {
         </Animated.View>
 
         <View style={styles.sessionButtonsContainer}>
-          <Text style={styles.sessionButtonsTitle}>📋 Oturum Seç</Text>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sessionButtonsTitle}>📋 Oturum Seç</Text>
+            <TouchableOpacity
+              style={styles.settingsButton}
+              onPress={() => setShowSettings(!showSettings)}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.settingsButtonText}>
+                {showSettings ? "✕" : "⚙️"}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {showSettings ? (
+            <View style={styles.settingsPanel}>
+              <View style={styles.timeAdjustRow}>
+                <Text style={styles.timeAdjustLabel}>⚡ Çalışma</Text>
+                <View style={styles.timeAdjustControls}>
+                  <TouchableOpacity
+                    style={styles.timeAdjustButton}
+                    onPress={() => adjustTime("work", workTime - 5 * 60)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.timeAdjustButtonText}>-</Text>
+                  </TouchableOpacity>
+                  <Text style={styles.timeAdjustValue}>
+                    {Math.floor(workTime / 60)} dk
+                  </Text>
+                  <TouchableOpacity
+                    style={styles.timeAdjustButton}
+                    onPress={() => adjustTime("work", workTime + 5 * 60)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.timeAdjustButtonText}>+</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              <View style={styles.timeAdjustRow}>
+                <Text style={styles.timeAdjustLabel}>☕ Kısa Mola</Text>
+                <View style={styles.timeAdjustControls}>
+                  <TouchableOpacity
+                    style={styles.timeAdjustButton}
+                    onPress={() =>
+                      adjustTime("shortBreak", shortBreakTime - 1 * 60)
+                    }
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.timeAdjustButtonText}>-</Text>
+                  </TouchableOpacity>
+                  <Text style={styles.timeAdjustValue}>
+                    {Math.floor(shortBreakTime / 60)} dk
+                  </Text>
+                  <TouchableOpacity
+                    style={styles.timeAdjustButton}
+                    onPress={() =>
+                      adjustTime("shortBreak", shortBreakTime + 1 * 60)
+                    }
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.timeAdjustButtonText}>+</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              <View style={styles.timeAdjustRow}>
+                <Text style={styles.timeAdjustLabel}>🌴 Uzun Mola</Text>
+                <View style={styles.timeAdjustControls}>
+                  <TouchableOpacity
+                    style={styles.timeAdjustButton}
+                    onPress={() =>
+                      adjustTime("longBreak", longBreakTime - 5 * 60)
+                    }
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.timeAdjustButtonText}>-</Text>
+                  </TouchableOpacity>
+                  <Text style={styles.timeAdjustValue}>
+                    {Math.floor(longBreakTime / 60)} dk
+                  </Text>
+                  <TouchableOpacity
+                    style={styles.timeAdjustButton}
+                    onPress={() =>
+                      adjustTime("longBreak", longBreakTime + 5 * 60)
+                    }
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.timeAdjustButtonText}>+</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          ) : null}
+
           <View style={styles.sessionButtons}>
             <TouchableOpacity
               style={[
@@ -400,7 +637,7 @@ export default function App() {
               onPress={() => {
                 if (!isRunning) {
                   setSessionType("work");
-                  setTimeLeft(WORK_TIME);
+                  setTimeLeft(workTime);
                 }
               }}
               activeOpacity={0.75}
@@ -433,7 +670,7 @@ export default function App() {
               onPress={() => {
                 if (!isRunning) {
                   setSessionType("shortBreak");
-                  setTimeLeft(SHORT_BREAK);
+                  setTimeLeft(shortBreakTime);
                 }
               }}
               activeOpacity={0.75}
@@ -467,7 +704,7 @@ export default function App() {
               onPress={() => {
                 if (!isRunning) {
                   setSessionType("longBreak");
-                  setTimeLeft(LONG_BREAK);
+                  setTimeLeft(longBreakTime);
                 }
               }}
               activeOpacity={0.75}
@@ -550,9 +787,55 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: "rgba(255, 255, 255, 0.4)",
   },
+  leftButton: {
+    left: 0,
+    right: "auto",
+  },
   statsButtonText: {
     fontSize: 20,
     color: "#fff",
+  },
+  themeSelectorTitle: {
+    fontSize: 18,
+    fontWeight: "800",
+    color: "#fff",
+    textAlign: "center",
+    marginBottom: 16,
+    textShadowColor: "rgba(0, 0, 0, 0.3)",
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 4,
+  },
+  themeGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 12,
+    justifyContent: "center",
+  },
+  themeButton: {
+    width: "45%",
+    alignItems: "center",
+    backgroundColor: "rgba(255, 255, 255, 0.15)",
+    borderRadius: 16,
+    padding: 12,
+    borderWidth: 2,
+    borderColor: "rgba(255, 255, 255, 0.3)",
+  },
+  activeThemeButton: {
+    borderColor: "#fff",
+    borderWidth: 3,
+    backgroundColor: "rgba(255, 255, 255, 0.25)",
+  },
+  themePreview: {
+    width: "100%",
+    height: 50,
+    borderRadius: 12,
+    marginBottom: 8,
+  },
+  themeButtonText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#fff",
+    textAlign: "center",
   },
   statsContainer: {
     width: "100%",
@@ -872,5 +1155,19 @@ const styles = StyleSheet.create({
     textShadowColor: "rgba(0, 0, 0, 0.3)",
     textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 4,
+  },
+  appVersion: {
+    marginTop: 20,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    backgroundColor: "rgba(255, 255, 255, 0.1)",
+    borderRadius: 20,
+    alignSelf: "center",
+  },
+  appVersionText: {
+    color: "rgba(255, 255, 255, 0.8)",
+    fontSize: 11,
+    fontWeight: "600",
+    letterSpacing: 0.5,
   },
 });
