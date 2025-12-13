@@ -77,6 +77,20 @@ export default function App() {
     }
   }, [lastDate]);
 
+  const getMotivationalMessage = () => {
+    const messages = [
+      "Harika iş çıkardın! 🎉",
+      "Mükemmel! Devam et! 💪",
+      "Süpersin! 🌟",
+      "Çok iyi gidiyorsun! 🚀",
+      "Harika! Sen bir şampiyonsun! 🏆",
+      "İnanılmaz! Devam et! ⭐",
+      "Odaklanman muhteşem! 🎯",
+      "Başarılısın! 💫",
+    ];
+    return messages[Math.floor(Math.random() * messages.length)];
+  };
+
   const handleTimerComplete = () => {
     Vibration.vibrate([500, 200, 500]);
 
@@ -87,33 +101,32 @@ export default function App() {
       setLastDate(new Date().toDateString());
     }
 
-    Alert.alert(
-      "Süre Doldu!",
+    const message =
       sessionType === "work"
-        ? "Çalışma süresi tamamlandı. Mola zamanı!"
-        : "Mola süresi tamamlandı. Tekrar çalışmaya hazır mısın?",
-      [
-        {
-          text: "Tamam",
-          onPress: () => {
-            if (sessionType === "work") {
-              const nextBreak = sessionCount === 3 ? "longBreak" : "shortBreak";
-              setSessionType(nextBreak);
-              setTimeLeft(nextBreak === "longBreak" ? LONG_BREAK : SHORT_BREAK);
-              if (nextBreak === "longBreak") {
-                setSessionCount(0);
-              } else {
-                setSessionCount((prev) => prev + 1);
-              }
+        ? `${getMotivationalMessage()}\n\nÇalışma süresi tamamlandı. Mola zamanı!`
+        : "Mola süresi tamamlandı. Tekrar çalışmaya hazır mısın?";
+
+    Alert.alert("Süre Doldu!", message, [
+      {
+        text: "Tamam",
+        onPress: () => {
+          if (sessionType === "work") {
+            const nextBreak = sessionCount === 3 ? "longBreak" : "shortBreak";
+            setSessionType(nextBreak);
+            setTimeLeft(nextBreak === "longBreak" ? LONG_BREAK : SHORT_BREAK);
+            if (nextBreak === "longBreak") {
+              setSessionCount(0);
             } else {
-              setSessionType("work");
-              setTimeLeft(WORK_TIME);
+              setSessionCount((prev) => prev + 1);
             }
-            setIsRunning(false);
-          },
+          } else {
+            setSessionType("work");
+            setTimeLeft(WORK_TIME);
+          }
+          setIsRunning(false);
         },
-      ]
-    );
+      },
+    ]);
   };
 
   const startTimer = () => {
