@@ -23,6 +23,8 @@ export default function App() {
   const [sessionType, setSessionType] = useState("work"); // 'work', 'shortBreak', 'longBreak'
   const [sessionCount, setSessionCount] = useState(0);
   const [weeklyPomodoros, setWeeklyPomodoros] = useState(0);
+  const [dailyPomodoros, setDailyPomodoros] = useState(0);
+  const [lastDate, setLastDate] = useState(new Date().toDateString());
   const intervalRef = useRef(null);
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
@@ -66,12 +68,23 @@ export default function App() {
     }
   }, [isRunning]);
 
+  // Günlük sayacı sıfırla (yeni gün başladığında)
+  useEffect(() => {
+    const today = new Date().toDateString();
+    if (lastDate !== today) {
+      setDailyPomodoros(0);
+      setLastDate(today);
+    }
+  }, [lastDate]);
+
   const handleTimerComplete = () => {
     Vibration.vibrate([500, 200, 500]);
 
-    // Haftalık pomodoro sayısını artır
+    // Günlük ve haftalık pomodoro sayısını artır
     if (sessionType === "work") {
+      setDailyPomodoros((prev) => prev + 1);
       setWeeklyPomodoros((prev) => prev + 1);
+      setLastDate(new Date().toDateString());
     }
 
     Alert.alert(
@@ -210,7 +223,7 @@ export default function App() {
               🎯 {sessionCount} Oturum Tamamlandı
             </Text>
             <Text style={styles.weeklyPomodorosText}>
-              📈 Bu Hafta: {weeklyPomodoros} Pomodoro
+              📅 Bugün: {dailyPomodoros} | 📈 Bu Hafta: {weeklyPomodoros}
             </Text>
           </View>
         </View>
