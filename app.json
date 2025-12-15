@@ -4,23 +4,13 @@
     "slug": "focusflow",
     "version": "2.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
-    "splash": {
-      "image": "./assets/splash.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#0f172a"
-    },
     "assetBundlePatterns": ["**/*"],
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.focusflow.app"
     },
     "android": {
-      "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#0f172a"
-      },
       "package": "com.focusflow.app",
       "permissions": [
         "NOTIFICATIONS",
@@ -28,24 +18,7 @@
       ]
     },
     "notification": {
-      "icon": "./assets/icon.png",
-      "color": "#3b82f6",
-      "androidMode": "default",
-      "androidCollapsedTitle": "FocusFlow"
-    },
-    "plugins": [
-      [
-        "expo-notifications",
-        {
-          "icon": "./assets/icon.png",
-          "color": "#3b82f6",
-          "sounds": []
-        }
-      ]
-    ],
-    "web": {
-      "favicon": "./assets/favicon.png"
-    },
-    "sdkVersion": "51.0.0"
+      "color": "#3b82f6"
+    }
   }
 }
