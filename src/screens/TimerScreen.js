@@ -11,7 +11,7 @@ import {
   Animated,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
-import { saveSession, getDailyGoal, getTodaySessions } from "../utils/storage";
+import { saveSession, getDailyGoal, getTodaySessions, calculateFocusScore } from "../utils/storage";
 
 const CATEGORIES = [
   { label: "Ders Çalışma", value: "study", color: "#3b82f6", emoji: "📚" },
@@ -176,11 +176,17 @@ export default function TimerScreen() {
   const handleSessionComplete = async () => {
     setIsRunning(false);
     const focusedTime = initialTime * 60 - timeLeft;
+    const completed = timeLeft === 0;
+    
+    // Odak skorunu hesapla
+    const focusScore = calculateFocusScore(distractionCount, completed);
+    
     const sessionData = {
       category: selectedCategory,
       duration: focusedTime,
       distractionCount,
-      completed: timeLeft === 0,
+      completed,
+      focusScore,
     };
 
     try {
@@ -204,7 +210,7 @@ export default function TimerScreen() {
 
       Alert.alert(
         "🎉 Tebrikler!",
-        `${randomMessage}\n\nKategori: ${categoryLabel}\nSüre: ${minutes} dakika\nDikkat Dağınıklığı: ${distractionCount}`,
+        `${randomMessage}\n\nKategori: ${categoryLabel}\nSüre: ${minutes} dakika\nDikkat Dağınıklığı: ${distractionCount}\nOdak Skoru: ${focusScore}/100`,
         [
           {
             text: "Tamam",
@@ -284,6 +290,8 @@ export default function TimerScreen() {
         >
           <Text
             style={[styles.timerText, isRunning && styles.timerTextFocused]}
+            numberOfLines={1}
+            adjustsFontSizeToFit
           >
             {formatTime(timeLeft)}
           </Text>
@@ -427,6 +435,25 @@ export default function TimerScreen() {
                 </Text>
               </View>
               <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>Odak Skoru:</Text>
+                <Text
+                  style={[
+                    styles.summaryValue,
+                    styles.focusScoreText,
+                    {
+                      color:
+                        lastSessionData.focusScore >= 80
+                          ? "#10b981"
+                          : lastSessionData.focusScore >= 50
+                          ? "#f59e0b"
+                          : "#ef4444",
+                    },
+                  ]}
+                >
+                  {lastSessionData.focusScore}/100
+                </Text>
+              </View>
+              <View style={styles.summaryRow}>
                 <Text style={styles.summaryLabel}>Durum:</Text>
                 <Text
                   style={[
@@ -545,7 +572,7 @@ const styles = StyleSheet.create({
     borderColor: "rgba(59, 130, 246, 0.5)",
   },
   timerText: {
-    fontSize: 72,
+    fontSize: 64,
     fontWeight: "bold",
     color: "#fff",
     fontFamily: "monospace",
@@ -553,10 +580,13 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 0, height: 4 },
     textShadowRadius: 12,
     letterSpacing: 4,
+    includeFontPadding: false,
+    textAlignVertical: "center",
   },
   timerTextFocused: {
-    fontSize: 84,
+    fontSize: 72,
     color: "#3b82f6",
+    letterSpacing: 6,
   },
   focusModeLabel: {
     fontSize: 14,
@@ -764,6 +794,10 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: "#fff",
     fontWeight: "bold",
+  },
+  focusScoreText: {
+    fontSize: 18,
+    fontWeight: "900",
   },
   // Modal Styles
   modalOverlay: {

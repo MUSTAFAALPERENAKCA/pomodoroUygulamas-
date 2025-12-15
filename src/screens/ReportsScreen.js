@@ -8,13 +8,19 @@ import {
   RefreshControl,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
-import { BarChart, PieChart } from "react-native-chart-kit";
+import { BarChart, PieChart, LineChart } from "react-native-chart-kit";
 import {
   getSessions,
   getTodaySessions,
   getLastWeekSessions,
   getDailyGoal,
+  getStreak,
+  getBadges,
+  getMostProductiveHour,
 } from "../utils/storage";
+import BadgeCard from "../components/BadgeCard";
+import StreakCard from "../components/StreakCard";
+import MotivationMessage from "../components/MotivationMessage";
 
 const screenWidth = Dimensions.get("window").width;
 
@@ -35,6 +41,14 @@ export default function ReportsScreen() {
   const [categoryData, setCategoryData] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
   const [dailyGoal, setDailyGoal] = useState(120);
+  
+  // New State
+  const [streakData, setStreakData] = useState({ current: 0, best: 0 });
+  const [badges, setBadges] = useState([]);
+  const [productiveHour, setProductiveHour] = useState(null);
+  const [distractionData, setDistractionData] = useState(null);
+  const [focusScoreByCategory, setFocusScoreByCategory] = useState([]);
+  const [recentSessions, setRecentSessions] = useState([]);
 
   // Extra Analytics
   const [averageSessionTime, setAverageSessionTime] = useState(0);
@@ -109,9 +123,93 @@ export default function ReportsScreen() {
         );
         setBestCategory(maxCategory);
       }
+      
+      // YENİ ÖZELLİKLERİ YÜKLE
+      
+      // Streak
+      const streak = await getStreak();
+      setStreakData(streak);
+      
+      // Rozetler
+      const badgesList = await getBadges();
+      setBadges(badgesList);
+      
+      // En verimli saat
+      const bestHour = await getMostProductiveHour();
+      setProductiveHour(bestHour);
+      
+      // Son seanslar (motivasyon mesajı için)
+      setRecentSessions(allSessions.slice(0, 10));
+      
+      // Dikkat Dağınıklığı Grafiği Verisi
+      const distractData = prepareDistractionData(weekSessions);
+      setDistractionData(distractData);
+      
+      // Kategoriye Göre Odak Skoru
+      const focusScores = prepareFocusScoreByCategory(allSessions);
+      setFocusScoreByCategory(focusScores);
+      
     } catch (error) {
       console.error("İstatistikler yüklenemedi:", error);
     }
+  };
+  
+  const prepareDistractionData = (sessions) => {
+    const last7Days = [];
+    const today = new Date();
+
+    for (let i = 6; i >= 0; i--) {
+      const date = new Date(today);
+      date.setDate(date.getDate() - i);
+      const dateString = date.toDateString();
+
+      const daySessions = sessions.filter(
+        (session) => new Date(session.date).toDateString() === dateString
+      );
+
+      const totalDistractions = daySessions.reduce(
+        (sum, session) => sum + (session.distractionCount || 0),
+        0
+      );
+
+      last7Days.push({
+        day: DAY_NAMES[date.getDay()],
+        count: totalDistractions,
+      });
+    }
+
+    return {
+      labels: last7Days.map((d) => d.day),
+      datasets: [
+        {
+          data: last7Days.map((d) => d.count),
+          color: (opacity = 1) => `rgba(239, 68, 68, ${opacity})`, // Kırmızı
+          strokeWidth: 2,
+        },
+      ],
+      legend: ["Dikkat Dağınıklığı"]
+    };
+  };
+
+  const prepareFocusScoreByCategory = (sessions) => {
+    const categoryScores = {};
+    const categoryCounts = {};
+
+    sessions.forEach((session) => {
+      const cat = session.category;
+      if (!categoryScores[cat]) {
+        categoryScores[cat] = 0;
+        categoryCounts[cat] = 0;
+      }
+      categoryScores[cat] += session.focusScore || 100; // Eğer focusScore yoksa varsayılan 100
+      categoryCounts[cat] += 1;
+    });
+
+    return Object.keys(categoryScores).map((key) => ({
+      name: CATEGORIES[key]?.label || key,
+      score: Math.round(categoryScores[key] / categoryCounts[key]),
+      color: CATEGORIES[key]?.color || "#6b7280",
+    }));
   };
 
   const prepareWeeklyData = (sessions) => {
@@ -231,31 +329,20 @@ export default function ReportsScreen() {
           </View>
         ) : (
           <>
-            {/* Bugünkü Progress */}
-            <View style={styles.todayProgressCard}>
-              <Text style={styles.todayProgressTitle}>📅 Bugünkü İlerleme</Text>
-              <View style={styles.progressBarContainer}>
-                <View
-                  style={[
-                    styles.progressBarFill,
-                    { width: `${getProgressPercentage()}%` },
-                  ]}
-                />
-              </View>
-              <View style={styles.todayProgressStats}>
-                <Text style={styles.todayProgressText}>
-                  {todayTotal} / {dailyGoal} dakika
-                </Text>
-                <Text style={styles.todayProgressPercent}>
-                  %{Math.round(getProgressPercentage())}
-                </Text>
-              </View>
-              {getProgressPercentage() >= 100 && (
-                <Text style={styles.congratsText}>
-                  🏆 Tebrikler! Hedefe ulaştın!
-                </Text>
-              )}
-            </View>
+          <>
+            {/* Motivasyon Mesajı */}
+            <MotivationMessage 
+              sessions={recentSessions} 
+              streak={streakData.current}
+              onDismiss={() => {}} 
+            />
+            
+            {/* Streak Kartı */}
+            <StreakCard 
+              streak={streakData.current} 
+              todayProgress={todayTotal} 
+              dailyGoal={dailyGoal} 
+            />
 
             {/* Ana İstatistikler - Grid Layout */}
             <View style={styles.statsGrid}>
@@ -302,10 +389,26 @@ export default function ReportsScreen() {
               </View>
             </View>
 
-            {/* Extra İçgörüler */}
-            {(mostProductiveDay || bestCategory) && (
+            {/* İçgörüler - Verimli Saat Eklendi */}
+            {(mostProductiveDay || bestCategory || productiveHour) && (
               <View style={styles.insightsSection}>
                 <Text style={styles.sectionTitle}>✨ İçgörüler</Text>
+
+                {productiveHour && (
+                  <View style={styles.insightCard}>
+                    <Text style={styles.insightIcon}>⚡</Text>
+                    <View style={styles.insightContent}>
+                      <Text style={styles.insightTitle}>En Verimli Zaman</Text>
+                      <Text style={styles.insightText}>
+                        {productiveHour.startHour}:00 - {productiveHour.endHour}:00 arası
+                        {"\n"}
+                        <Text style={styles.insightSubText}>
+                           Ort. {productiveHour.avgDistraction} dikkat dağınıklığı
+                        </Text>
+                      </Text>
+                    </View>
+                  </View>
+                )}
 
                 {mostProductiveDay && mostProductiveDay.minutes > 0 && (
                   <View style={styles.insightCard}>
@@ -334,10 +437,24 @@ export default function ReportsScreen() {
               </View>
             )}
 
+            {/* Rozetler Galerisi */}
+            <View style={styles.badgesSection}>
+              <Text style={styles.sectionTitle}>🏆 Başarı Rozetleri</Text>
+              {badges.map((badge) => (
+                <BadgeCard 
+                  key={badge.id} 
+                  badge={badge} 
+                  onPress={() => {
+                    // Rozet detay modalı eklenebilir
+                  }} 
+                />
+              ))}
+            </View>
+
             {/* Haftalık Grafik */}
             {weeklyData.length > 0 && (
               <View style={styles.chartContainer}>
-                <Text style={styles.sectionTitle}>📈 Son 7 Gün</Text>
+                <Text style={styles.sectionTitle}>📈 Son 7 Gün Süre</Text>
                 <BarChart
                   data={{
                     labels: weeklyData.map((d) => d.day),
@@ -348,13 +465,33 @@ export default function ReportsScreen() {
                     ],
                   }}
                   width={screenWidth - 40}
-                  height={240}
+                  height={220}
                   chartConfig={chartConfig}
                   style={styles.chart}
                   showValuesOnTopOfBars
                   fromZero
                   yAxisSuffix=" dk"
                   withInnerLines={true}
+                />
+              </View>
+            )}
+            
+            {/* Dikkat Dağınıklığı Grafiği - LineChart */}
+            {distractionData && (
+              <View style={styles.chartContainer}>
+                <Text style={styles.sectionTitle}>⚠️ Dikkat Dağınıklığı Trendi</Text>
+                <LineChart
+                  data={distractionData}
+                  width={screenWidth - 40}
+                  height={220}
+                  chartConfig={{
+                    ...chartConfig,
+                    color: (opacity = 1) => `rgba(239, 68, 68, ${opacity})`,
+                  }}
+                  style={styles.chart}
+                  bezier
+                  withDots
+                  withInnerLines
                 />
               </View>
             )}
@@ -368,7 +505,7 @@ export default function ReportsScreen() {
                 <PieChart
                   data={categoryData}
                   width={screenWidth - 40}
-                  height={240}
+                  height={220}
                   chartConfig={chartConfig}
                   accessor="population"
                   backgroundColor="transparent"
@@ -402,6 +539,38 @@ export default function ReportsScreen() {
                 </View>
               </View>
             )}
+            
+            {/* Kategori Bazlı Odak Skoru */}
+            {focusScoreByCategory.length > 0 && (
+              <View style={styles.chartContainer}>
+                <Text style={styles.sectionTitle}>⭐ Kategori Bazlı Odak Skoru</Text>
+                <View style={styles.categoryDetails}>
+                  {focusScoreByCategory.map((item, index) => (
+                    <View key={index} style={styles.scoreBarContainer}>
+                      <View style={styles.scoreBarHeader}>
+                         <Text style={styles.scoreBarLabel}>{item.name}</Text>
+                         <Text style={[
+                           styles.scoreBarValue,
+                           { color: item.score >= 80 ? "#10b981" : item.score >= 50 ? "#f59e0b" : "#ef4444" }
+                         ]}>{item.score}/100</Text>
+                      </View>
+                      <View style={styles.scoreBarBg}>
+                        <View 
+                          style={[
+                            styles.scoreBarFill, 
+                            { 
+                              width: `${item.score}%`,
+                              backgroundColor: item.color 
+                            }
+                          ]} 
+                        />
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            )}
+          </>
           </>
         )}
       </ScrollView>
@@ -579,6 +748,16 @@ const styles = StyleSheet.create({
     color: "#94a3b8",
     fontWeight: "600",
   },
+  insightSubText: {
+    fontSize: 12,
+    color: "#e2e8f0",
+    marginTop: 4,
+    fontStyle: "italic",
+  },
+  // Badges Section
+  badgesSection: {
+    marginBottom: 30,
+  },
   // Charts
   chartContainer: {
     marginBottom: 30,
@@ -633,6 +812,34 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: "#94a3b8",
     marginTop: 2,
+  },
+  // Score Bar Styles
+  scoreBarContainer: {
+    marginBottom: 8,
+  },
+  scoreBarHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 6,
+  },
+  scoreBarLabel: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  scoreBarValue: {
+    fontSize: 14,
+    fontWeight: "bold",
+  },
+  scoreBarBg: {
+    height: 10,
+    backgroundColor: "rgba(255, 255, 255, 0.1)",
+    borderRadius: 5,
+    overflow: "hidden",
+  },
+  scoreBarFill: {
+    height: "100%",
+    borderRadius: 5,
   },
   // Empty State
   emptyState: {
