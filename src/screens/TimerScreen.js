@@ -12,6 +12,7 @@ import {
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { saveSession, getDailyGoal, getTodaySessions, calculateFocusScore } from "../utils/storage";
+import * as Notifications from "expo-notifications";
 
 const CATEGORIES = [
   { label: "Ders Çalışma", value: "study", color: "#3b82f6", emoji: "📚" },
@@ -112,7 +113,7 @@ export default function TimerScreen() {
 
   // AppState ile dikkat dağınıklığı takibi - GELİŞMİŞ VERSİYON
   useEffect(() => {
-    const subscription = AppState.addEventListener("change", (nextAppState) => {
+    const subscription = AppState.addEventListener("change", async (nextAppState) => {
       if (
         appState.current.match(/active/) &&
         nextAppState === "background" &&
@@ -121,6 +122,9 @@ export default function TimerScreen() {
         // Uygulama arka plana alındı - Dikkat dağınıklığı!
         setDistractionCount((prev) => prev + 1);
         setIsRunning(false);
+
+        // Bildirim gönder
+        await sendFocusNotification();
       }
 
       // Background'dan active'e döndüğünde ve timer duraklamışsa
@@ -131,6 +135,9 @@ export default function TimerScreen() {
         sessionStartTime &&
         timeLeft > 0
       ) {
+        // Bildirimleri iptal et
+        await Notifications.cancelAllScheduledNotificationsAsync();
+        
         // Kullanıcıya seçenek sun
         setShowResumeModal(true);
       }
@@ -143,29 +150,57 @@ export default function TimerScreen() {
     };
   }, [isRunning, sessionStartTime, timeLeft]);
 
-  const handleStart = () => {
+  const handleStart = async () => {
     if (!sessionStartTime) {
       setSessionStartTime(Date.now());
     }
     setIsRunning(true);
     setShowSummary(false);
+    
+    // Önceki bildirimleri iptal et
+    await Notifications.cancelAllScheduledNotificationsAsync();
   };
 
   const handlePause = () => {
     setIsRunning(false);
   };
 
-  const handleReset = () => {
+  // Odaklanma bildirimi gönder
+  const sendFocusNotification = async () => {
+    try {
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title: "⚠️ Dikkat Dağınıklığı!",
+          body: "Çalışman devam ediyor! Geri dönmek ister misin? 💪",
+          sound: true,
+          priority: Notifications.AndroidNotificationPriority.HIGH,
+          vibrate: [0, 250, 250, 250],
+          data: { type: "focus_reminder" },
+        },
+        trigger: { seconds: 2 },
+      });
+    } catch (error) {
+      console.log("Bildirim gönderilemedi:", error);
+    }
+  };
+
+  const handleReset = async () => {
     setIsRunning(false);
     setTimeLeft(initialTime * 60);
     setDistractionCount(0);
     setSessionStartTime(null);
     setShowSummary(false);
+    
+    // Tüm bildirimleri iptal et
+    await Notifications.cancelAllScheduledNotificationsAsync();
   };
 
-  const handleResume = () => {
+  const handleResume = async () => {
     setShowResumeModal(false);
     setIsRunning(true);
+    
+    // Bildirimleri iptal et
+    await Notifications.cancelAllScheduledNotificationsAsync();
   };
 
   const handleEndSession = () => {
@@ -175,6 +210,10 @@ export default function TimerScreen() {
 
   const handleSessionComplete = async () => {
     setIsRunning(false);
+    
+    // Tüm bildirimleri iptal et
+    await Notifications.cancelAllScheduledNotificationsAsync();
+    
     const focusedTime = initialTime * 60 - timeLeft;
     const completed = timeLeft === 0;
     
