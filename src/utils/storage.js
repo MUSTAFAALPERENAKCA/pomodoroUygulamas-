@@ -1,6 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const SESSIONS_KEY = "@focus_sessions";
+const DAILY_GOAL_KEY = "@daily_goal";
 
 // Seans kaydet
 export const saveSession = async (session) => {
@@ -69,5 +70,25 @@ export const clearAllSessions = async () => {
     await AsyncStorage.removeItem(SESSIONS_KEY);
   } catch (error) {
     console.error("Veriler silinemedi:", error);
+  }
+};
+
+// Günlük hedef kaydet (dakika cinsinden)
+export const saveDailyGoal = async (minutes) => {
+  try {
+    await AsyncStorage.setItem(DAILY_GOAL_KEY, minutes.toString());
+  } catch (error) {
+    console.error("Günlük hedef kaydedilemedi:", error);
+  }
+};
+
+// Günlük hedef getir
+export const getDailyGoal = async () => {
+  try {
+    const goal = await AsyncStorage.getItem(DAILY_GOAL_KEY);
+    return goal ? parseInt(goal, 10) : 120; // Varsayılan 120 dakika (2 saat)
+  } catch (error) {
+    console.error("Günlük hedef getirilemedi:", error);
+    return 120;
   }
 };

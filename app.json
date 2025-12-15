@@ -1,31 +1,32 @@
 {
   "expo": {
-    "name": "Pomodoro Timer",
-    "slug": "pomodoro",
-    "version": "1.0.0",
+    "name": "FocusFlow",
+    "slug": "focusflow",
+    "version": "2.0.0",
+    "sdkVersion": "54.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "dark",
+    "platforms": ["ios", "android", "web"],
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#0f172a"
     },
-    "assetBundlePatterns": [
-      "**/*"
-    ],
+    "assetBundlePatterns": ["**/*"],
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.focusflow.app"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
-      }
+        "backgroundColor": "#0f172a"
+      },
+      "package": "com.focusflow.app"
     },
     "web": {
       "favicon": "./assets/favicon.png"
     }
   }
 }
-

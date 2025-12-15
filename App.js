@@ -17,40 +17,51 @@ export default function App() {
           tabBarIcon: ({ focused, color, size }) => {
             let iconName;
 
-            if (route.name === "Zamanlayıcı") {
+            if (route.name === "Timer") {
               iconName = focused ? "timer" : "timer-outline";
-            } else if (route.name === "Raporlar") {
+            } else if (route.name === "Reports") {
               iconName = focused ? "stats-chart" : "stats-chart-outline";
             }
 
             return <Ionicons name={iconName} size={size} color={color} />;
           },
-          tabBarActiveTintColor: "#6366f1",
-          tabBarInactiveTintColor: "gray",
+          tabBarActiveTintColor: "#3b82f6",
+          tabBarInactiveTintColor: "#94a3b8",
           tabBarStyle: {
-            backgroundColor: "#1f2937",
-            borderTopColor: "#374151",
+            backgroundColor: "#0f172a",
+            borderTopColor: "#1e293b",
             paddingBottom: 8,
-            height: 60,
+            height: 65,
+            elevation: 0,
+            shadowOpacity: 0,
           },
           headerStyle: {
-            backgroundColor: "#1f2937",
+            backgroundColor: "#0f172a",
+            elevation: 0,
+            shadowOpacity: 0,
           },
           headerTintColor: "#fff",
           headerTitleStyle: {
             fontWeight: "bold",
+            fontSize: 18,
           },
         })}
       >
         <Tab.Screen
-          name="Zamanlayıcı"
+          name="Timer"
           component={TimerScreen}
-          options={{ title: "Odaklanma Seansı" }}
+          options={{
+            title: "FocusFlow",
+            tabBarLabel: "Odaklanma",
+          }}
         />
         <Tab.Screen
-          name="Raporlar"
+          name="Reports"
           component={ReportsScreen}
-          options={{ title: "İstatistikler ve Raporlar" }}
+          options={{
+            title: "İstatistikler",
+            tabBarLabel: "Raporlar",
+          }}
         />
       </Tab.Navigator>
     </NavigationContainer>

@@ -7,20 +7,30 @@ import {
   AppState,
   Alert,
   ScrollView,
+  Modal,
+  Animated,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
-import { Picker } from "@react-native-picker/picker";
-import { saveSession } from "../utils/storage";
+import { saveSession, getDailyGoal, getTodaySessions } from "../utils/storage";
 
 const CATEGORIES = [
-  { label: "Ders Çalışma", value: "study", color: "#3b82f6" },
-  { label: "Kodlama", value: "coding", color: "#8b5cf6" },
-  { label: "Proje", value: "project", color: "#ec4899" },
-  { label: "Kitap Okuma", value: "reading", color: "#10b981" },
+  { label: "Ders Çalışma", value: "study", color: "#3b82f6", emoji: "📚" },
+  { label: "Kodlama", value: "coding", color: "#8b5cf6", emoji: "💻" },
+  { label: "Proje", value: "project", color: "#ec4899", emoji: "🎯" },
+  { label: "Kitap Okuma", value: "reading", color: "#10b981", emoji: "📖" },
+];
+
+const MOTIVATION_MESSAGES = [
+  "Harika gidiyorsun! 🌟",
+  "Odaklanman mükemmel! 🎯",
+  "Süpersin! Devam et! 💪",
+  "Bugün çok üretkensin! ⭐",
+  "Hedefine yaklaşıyorsun! 🚀",
+  "İnanılmaz konsantrasyon! 🔥",
 ];
 
 export default function TimerScreen() {
-  const [timeLeft, setTimeLeft] = useState(25 * 60); // 25 dakika
+  const [timeLeft, setTimeLeft] = useState(25 * 60);
   const [initialTime, setInitialTime] = useState(25);
   const [isRunning, setIsRunning] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState("study");
@@ -29,8 +39,35 @@ export default function TimerScreen() {
   const [showSummary, setShowSummary] = useState(false);
   const [lastSessionData, setLastSessionData] = useState(null);
 
+  // Günlük hedef
+  const [dailyGoal, setDailyGoal] = useState(120);
+  const [todayTotal, setTodayTotal] = useState(0);
+
+  // AppState için modal
+  const [showResumeModal, setShowResumeModal] = useState(false);
+
+  // Animasyon
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+
   const intervalRef = useRef(null);
   const appState = useRef(AppState.currentState);
+
+  // Günlük hedef ve bugünkü toplamı yükle
+  useEffect(() => {
+    loadDailyData();
+  }, []);
+
+  const loadDailyData = async () => {
+    const goal = await getDailyGoal();
+    setDailyGoal(goal);
+
+    const todaySessions = await getTodaySessions();
+    const total = todaySessions.reduce(
+      (sum, session) => sum + Math.floor(session.duration / 60),
+      0
+    );
+    setTodayTotal(total);
+  };
 
   // Zamanlayıcı
   useEffect(() => {
@@ -51,7 +88,29 @@ export default function TimerScreen() {
     return () => clearInterval(intervalRef.current);
   }, [isRunning, timeLeft]);
 
-  // AppState ile dikkat dağınıklığı takibi
+  // Timer aktifken pulse animasyonu
+  useEffect(() => {
+    if (isRunning) {
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnim, {
+            toValue: 1.05,
+            duration: 1000,
+            useNativeDriver: true,
+          }),
+          Animated.timing(pulseAnim, {
+            toValue: 1,
+            duration: 1000,
+            useNativeDriver: true,
+          }),
+        ])
+      ).start();
+    } else {
+      pulseAnim.setValue(1);
+    }
+  }, [isRunning]);
+
+  // AppState ile dikkat dağınıklığı takibi - GELİŞMİŞ VERSİYON
   useEffect(() => {
     const subscription = AppState.addEventListener("change", (nextAppState) => {
       if (
@@ -62,19 +121,27 @@ export default function TimerScreen() {
         // Uygulama arka plana alındı - Dikkat dağınıklığı!
         setDistractionCount((prev) => prev + 1);
         setIsRunning(false);
-        Alert.alert(
-          "Dikkat Dağınıklığı",
-          "Uygulamadan ayrıldınız! Seans duraklatıldı.",
-          [{ text: "Tamam" }]
-        );
       }
+
+      // Background'dan active'e döndüğünde ve timer duraklamışsa
+      if (
+        appState.current === "background" &&
+        nextAppState === "active" &&
+        !isRunning &&
+        sessionStartTime &&
+        timeLeft > 0
+      ) {
+        // Kullanıcıya seçenek sun
+        setShowResumeModal(true);
+      }
+
       appState.current = nextAppState;
     });
 
     return () => {
       subscription.remove();
     };
-  }, [isRunning]);
+  }, [isRunning, sessionStartTime, timeLeft]);
 
   const handleStart = () => {
     if (!sessionStartTime) {
@@ -96,6 +163,16 @@ export default function TimerScreen() {
     setShowSummary(false);
   };
 
+  const handleResume = () => {
+    setShowResumeModal(false);
+    setIsRunning(true);
+  };
+
+  const handleEndSession = () => {
+    setShowResumeModal(false);
+    handleSessionComplete();
+  };
+
   const handleSessionComplete = async () => {
     setIsRunning(false);
     const focusedTime = initialTime * 60 - timeLeft;
@@ -111,13 +188,23 @@ export default function TimerScreen() {
       setLastSessionData(sessionData);
       setShowSummary(true);
 
+      // Bugünkü toplamı güncelle
+      await loadDailyData();
+
+      // Motivasyon mesajı
+      const randomMessage =
+        MOTIVATION_MESSAGES[
+          Math.floor(Math.random() * MOTIVATION_MESSAGES.length)
+        ];
+
+      const categoryLabel = CATEGORIES.find(
+        (c) => c.value === selectedCategory
+      )?.label;
+      const minutes = Math.floor(focusedTime / 60);
+
       Alert.alert(
         "🎉 Tebrikler!",
-        `Seans tamamlandı!\n\nKategori: ${
-          CATEGORIES.find((c) => c.value === selectedCategory)?.label
-        }\nSüre: ${Math.floor(
-          focusedTime / 60
-        )} dakika\nDikkat Dağınıklığı: ${distractionCount}`,
+        `${randomMessage}\n\nKategori: ${categoryLabel}\nSüre: ${minutes} dakika\nDikkat Dağınıklığı: ${distractionCount}`,
         [
           {
             text: "Tamam",
@@ -147,12 +234,62 @@ export default function TimerScreen() {
     }
   };
 
+  const getProgressPercentage = () => {
+    return Math.min((todayTotal / dailyGoal) * 100, 100);
+  };
+
+  const getProgressMessage = () => {
+    const percentage = getProgressPercentage();
+    if (percentage >= 100) return "🏆 Günlük hedefe ulaştın!";
+    if (percentage >= 75) return "⭐ Neredeyse tamam!";
+    if (percentage >= 50) return "💪 Yarı yoldasın!";
+    if (percentage >= 25) return "🚀 İyi başladın!";
+    return "📊 Günlük Hedefin";
+  };
+
   return (
-    <LinearGradient colors={["#1f2937", "#111827"]} style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        {/* Zamanlayıcı */}
-        <View style={styles.timerSection}>
-          <Text style={styles.timerText}>{formatTime(timeLeft)}</Text>
+    <LinearGradient
+      colors={["#0f172a", "#1e293b", "#334155"]}
+      style={styles.container}
+    >
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Günlük Hedef Progress */}
+        {!isRunning && (
+          <View style={styles.dailyGoalCard}>
+            <Text style={styles.dailyGoalTitle}>{getProgressMessage()}</Text>
+            <View style={styles.progressBarContainer}>
+              <View
+                style={[
+                  styles.progressBarFill,
+                  { width: `${getProgressPercentage()}%` },
+                ]}
+              />
+            </View>
+            <Text style={styles.dailyGoalText}>
+              {todayTotal} / {dailyGoal} dakika
+            </Text>
+          </View>
+        )}
+
+        {/* Zamanlayıcı - FOCUS MODE */}
+        <Animated.View
+          style={[
+            styles.timerSection,
+            isRunning && styles.timerSectionFocused,
+            { transform: [{ scale: pulseAnim }] },
+          ]}
+        >
+          <Text
+            style={[styles.timerText, isRunning && styles.timerTextFocused]}
+          >
+            {formatTime(timeLeft)}
+          </Text>
+          {isRunning && (
+            <Text style={styles.focusModeLabel}>🎯 ODAKLANMA MODU</Text>
+          )}
           <View style={styles.progressBar}>
             <View
               style={[
@@ -168,16 +305,17 @@ export default function TimerScreen() {
               ]}
             />
           </View>
-        </View>
+        </Animated.View>
 
-        {/* Süre Ayarlama */}
+        {/* Süre Ayarlama - Sadece timer duruyorken göster */}
         {!isRunning && !showSummary && (
           <View style={styles.timeAdjustSection}>
-            <Text style={styles.sectionTitle}>Süre Ayarla</Text>
+            <Text style={styles.sectionTitle}>⏱️ Süre Ayarla</Text>
             <View style={styles.timeButtons}>
               <TouchableOpacity
                 style={styles.timeButton}
                 onPress={() => adjustTime(initialTime - 5)}
+                disabled={initialTime <= 5}
               >
                 <Text style={styles.timeButtonText}>-5 dk</Text>
               </TouchableOpacity>
@@ -185,6 +323,7 @@ export default function TimerScreen() {
               <TouchableOpacity
                 style={styles.timeButton}
                 onPress={() => adjustTime(initialTime + 5)}
+                disabled={initialTime >= 120}
               >
                 <Text style={styles.timeButtonText}>+5 dk</Text>
               </TouchableOpacity>
@@ -192,35 +331,45 @@ export default function TimerScreen() {
           </View>
         )}
 
-        {/* Kategori Seçimi */}
+        {/* Kategori Seçimi - Sadece timer duruyorken göster */}
         {!isRunning && !showSummary && (
           <View style={styles.categorySection}>
-            <Text style={styles.sectionTitle}>Kategori Seçin</Text>
-            <View style={styles.pickerContainer}>
-              <Picker
-                selectedValue={selectedCategory}
-                onValueChange={(itemValue) => setSelectedCategory(itemValue)}
-                style={styles.picker}
-                dropdownIconColor="#fff"
-              >
-                {CATEGORIES.map((cat) => (
-                  <Picker.Item
-                    key={cat.value}
-                    label={cat.label}
-                    value={cat.value}
-                    color="#000"
-                  />
-                ))}
-              </Picker>
+            <Text style={styles.sectionTitle}>🎯 Kategori Seçin</Text>
+            <View style={styles.categoryButtons}>
+              {CATEGORIES.map((cat) => (
+                <TouchableOpacity
+                  key={cat.value}
+                  style={[
+                    styles.categoryButton,
+                    selectedCategory === cat.value &&
+                      styles.activeCategoryButton,
+                    { borderColor: cat.color },
+                  ]}
+                  onPress={() => setSelectedCategory(cat.value)}
+                >
+                  <Text style={styles.categoryEmoji}>{cat.emoji}</Text>
+                  <Text
+                    style={[
+                      styles.categoryButtonText,
+                      selectedCategory === cat.value &&
+                        styles.activeCategoryButtonText,
+                    ]}
+                  >
+                    {cat.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
             </View>
           </View>
         )}
 
         {/* Dikkat Dağınıklığı Sayacı */}
-        <View style={styles.distractionSection}>
-          <Text style={styles.distractionLabel}>Dikkat Dağınıklığı</Text>
-          <Text style={styles.distractionCount}>{distractionCount}</Text>
-        </View>
+        {!isRunning && distractionCount > 0 && (
+          <View style={styles.distractionSection}>
+            <Text style={styles.distractionLabel}>⚠️ Dikkat Dağınıklığı</Text>
+            <Text style={styles.distractionCount}>{distractionCount}</Text>
+          </View>
+        )}
 
         {/* Kontrol Butonları */}
         <View style={styles.buttonContainer}>
@@ -255,6 +404,10 @@ export default function TimerScreen() {
               <View style={styles.summaryRow}>
                 <Text style={styles.summaryLabel}>Kategori:</Text>
                 <Text style={styles.summaryValue}>
+                  {
+                    CATEGORIES.find((c) => c.value === lastSessionData.category)
+                      ?.emoji
+                  }{" "}
                   {
                     CATEGORIES.find((c) => c.value === lastSessionData.category)
                       ?.label
@@ -292,6 +445,39 @@ export default function TimerScreen() {
           </View>
         )}
       </ScrollView>
+
+      {/* Resume Modal - Background'dan döndüğünde */}
+      <Modal
+        visible={showResumeModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowResumeModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>⚠️ Dikkat Dağınıklığı</Text>
+            <Text style={styles.modalText}>
+              Uygulamadan ayrıldınız!{"\n"}Seansınıza devam etmek ister misiniz?
+            </Text>
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalButtonPrimary]}
+                onPress={handleResume}
+              >
+                <Text style={styles.modalButtonText}>▶️ Devam Et</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalButtonSecondary]}
+                onPress={handleEndSession}
+              >
+                <Text style={styles.modalButtonTextSecondary}>
+                  ⏹️ Seansı Bitir
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </LinearGradient>
   );
 }
@@ -303,42 +489,110 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: 20,
   },
+  dailyGoalCard: {
+    backgroundColor: "rgba(59, 130, 246, 0.1)",
+    borderRadius: 20,
+    padding: 20,
+    marginBottom: 20,
+    borderWidth: 2,
+    borderColor: "rgba(59, 130, 246, 0.3)",
+    shadowColor: "#3b82f6",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  dailyGoalTitle: {
+    fontSize: 18,
+    fontWeight: "bold",
+    color: "#fff",
+    textAlign: "center",
+    marginBottom: 12,
+  },
+  progressBarContainer: {
+    height: 12,
+    backgroundColor: "rgba(255, 255, 255, 0.1)",
+    borderRadius: 6,
+    overflow: "hidden",
+    marginBottom: 8,
+  },
+  progressBarFill: {
+    height: "100%",
+    backgroundColor: "#3b82f6",
+    borderRadius: 6,
+  },
+  dailyGoalText: {
+    fontSize: 14,
+    color: "#94a3b8",
+    textAlign: "center",
+    fontWeight: "600",
+  },
   timerSection: {
     alignItems: "center",
     marginVertical: 30,
+    backgroundColor: "rgba(255, 255, 255, 0.05)",
+    borderRadius: 30,
+    padding: 30,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  timerSectionFocused: {
+    backgroundColor: "rgba(59, 130, 246, 0.15)",
+    borderWidth: 3,
+    borderColor: "rgba(59, 130, 246, 0.5)",
   },
   timerText: {
     fontSize: 72,
     fontWeight: "bold",
     color: "#fff",
     fontFamily: "monospace",
-    textShadowColor: "rgba(99, 102, 241, 0.5)",
+    textShadowColor: "rgba(59, 130, 246, 0.8)",
     textShadowOffset: { width: 0, height: 4 },
-    textShadowRadius: 10,
+    textShadowRadius: 12,
+    letterSpacing: 4,
+  },
+  timerTextFocused: {
+    fontSize: 84,
+    color: "#3b82f6",
+  },
+  focusModeLabel: {
+    fontSize: 14,
+    color: "#3b82f6",
+    fontWeight: "bold",
+    marginTop: 12,
+    letterSpacing: 2,
   },
   progressBar: {
     width: "100%",
-    height: 8,
+    height: 10,
     backgroundColor: "rgba(255, 255, 255, 0.1)",
-    borderRadius: 4,
-    marginTop: 20,
+    borderRadius: 5,
+    marginTop: 24,
     overflow: "hidden",
   },
   progressFill: {
     height: "100%",
-    borderRadius: 4,
+    borderRadius: 5,
   },
   timeAdjustSection: {
     marginVertical: 20,
     backgroundColor: "rgba(255, 255, 255, 0.05)",
-    borderRadius: 16,
-    padding: 20,
+    borderRadius: 20,
+    padding: 24,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
   },
   sectionTitle: {
     fontSize: 18,
     fontWeight: "bold",
     color: "#fff",
-    marginBottom: 15,
+    marginBottom: 16,
     textAlign: "center",
   },
   timeButtons: {
@@ -347,10 +601,15 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   timeButton: {
-    backgroundColor: "#6366f1",
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 12,
+    backgroundColor: "#3b82f6",
+    paddingVertical: 14,
+    paddingHorizontal: 28,
+    borderRadius: 14,
+    shadowColor: "#3b82f6",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+    elevation: 4,
   },
   timeButtonText: {
     color: "#fff",
@@ -359,31 +618,72 @@ const styles = StyleSheet.create({
   },
   timeValue: {
     color: "#fff",
-    fontSize: 20,
+    fontSize: 24,
     fontWeight: "bold",
   },
   categorySection: {
     marginVertical: 20,
     backgroundColor: "rgba(255, 255, 255, 0.05)",
+    borderRadius: 20,
+    padding: 24,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  categoryButtons: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 12,
+    justifyContent: "center",
+  },
+  categoryButton: {
+    paddingVertical: 16,
+    paddingHorizontal: 20,
     borderRadius: 16,
-    padding: 20,
+    backgroundColor: "rgba(255, 255, 255, 0.08)",
+    borderWidth: 2,
+    minWidth: "46%",
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  pickerContainer: {
-    backgroundColor: "rgba(255, 255, 255, 0.9)",
-    borderRadius: 12,
-    overflow: "hidden",
+  activeCategoryButton: {
+    backgroundColor: "rgba(255, 255, 255, 0.15)",
+    borderWidth: 3,
+    shadowOpacity: 0.4,
+    elevation: 6,
   },
-  picker: {
-    color: "#000",
+  categoryEmoji: {
+    fontSize: 28,
+    marginBottom: 6,
+  },
+  categoryButtonText: {
+    color: "#94a3b8",
+    fontSize: 14,
+    fontWeight: "bold",
+  },
+  activeCategoryButtonText: {
+    color: "#fff",
+    fontSize: 15,
   },
   distractionSection: {
     alignItems: "center",
     marginVertical: 20,
     backgroundColor: "rgba(239, 68, 68, 0.1)",
-    borderRadius: 16,
-    padding: 20,
+    borderRadius: 20,
+    padding: 24,
     borderWidth: 2,
-    borderColor: "rgba(239, 68, 68, 0.3)",
+    borderColor: "rgba(239, 68, 68, 0.4)",
+    shadowColor: "#ef4444",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
   },
   distractionLabel: {
     fontSize: 16,
@@ -392,7 +692,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   distractionCount: {
-    fontSize: 48,
+    fontSize: 56,
     fontWeight: "bold",
     color: "#ef4444",
   },
@@ -403,9 +703,14 @@ const styles = StyleSheet.create({
   },
   button: {
     flex: 1,
-    paddingVertical: 16,
-    borderRadius: 16,
+    paddingVertical: 18,
+    borderRadius: 18,
     alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,
   },
   startButton: {
     backgroundColor: "#10b981",
@@ -414,7 +719,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#f59e0b",
   },
   resetButton: {
-    backgroundColor: "#6b7280",
+    backgroundColor: "#64748b",
   },
   buttonText: {
     color: "#fff",
@@ -425,34 +730,106 @@ const styles = StyleSheet.create({
     marginVertical: 20,
   },
   summaryTitle: {
+    fontSize: 26,
+    fontWeight: "bold",
+    color: "#fff",
+    textAlign: "center",
+    marginBottom: 20,
+  },
+  summaryCard: {
+    backgroundColor: "rgba(59, 130, 246, 0.1)",
+    borderRadius: 20,
+    padding: 24,
+    borderWidth: 2,
+    borderColor: "rgba(59, 130, 246, 0.3)",
+    shadowColor: "#3b82f6",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  summaryRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(255, 255, 255, 0.1)",
+  },
+  summaryLabel: {
+    fontSize: 16,
+    color: "#94a3b8",
+    fontWeight: "600",
+  },
+  summaryValue: {
+    fontSize: 16,
+    color: "#fff",
+    fontWeight: "bold",
+  },
+  // Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.8)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  modalContent: {
+    backgroundColor: "#1e293b",
+    borderRadius: 24,
+    padding: 28,
+    width: "100%",
+    maxWidth: 400,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.5,
+    shadowRadius: 16,
+    elevation: 10,
+    borderWidth: 2,
+    borderColor: "rgba(239, 68, 68, 0.3)",
+  },
+  modalTitle: {
     fontSize: 24,
     fontWeight: "bold",
     color: "#fff",
     textAlign: "center",
     marginBottom: 16,
   },
-  summaryCard: {
-    backgroundColor: "rgba(255, 255, 255, 0.05)",
+  modalText: {
+    fontSize: 16,
+    color: "#94a3b8",
+    textAlign: "center",
+    marginBottom: 28,
+    lineHeight: 24,
+  },
+  modalButtons: {
+    gap: 12,
+  },
+  modalButton: {
+    paddingVertical: 16,
     borderRadius: 16,
-    padding: 20,
+    alignItems: "center",
+  },
+  modalButtonPrimary: {
+    backgroundColor: "#10b981",
+    shadowColor: "#10b981",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  modalButtonSecondary: {
+    backgroundColor: "rgba(255, 255, 255, 0.1)",
     borderWidth: 2,
-    borderColor: "rgba(99, 102, 241, 0.3)",
+    borderColor: "#ef4444",
   },
-  summaryRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: "rgba(255, 255, 255, 0.1)",
-  },
-  summaryLabel: {
-    fontSize: 16,
-    color: "#9ca3af",
-    fontWeight: "600",
-  },
-  summaryValue: {
-    fontSize: 16,
+  modalButtonText: {
     color: "#fff",
+    fontSize: 18,
+    fontWeight: "bold",
+  },
+  modalButtonTextSecondary: {
+    color: "#ef4444",
+    fontSize: 18,
     fontWeight: "bold",
   },
 });
